@@ -1,0 +1,10 @@
+local
+	$(SML_LIB)/basis/mlton.mlb
+	$(SML_LIB)/basis/basis.mlb
+in
+	os-constants.sml
+	server-mlton.sml
+	server.sml
+	t.sml
+	main.sml
+end
