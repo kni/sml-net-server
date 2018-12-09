@@ -5,12 +5,12 @@ datatype ('a, 'b, 'c, 'd) settings = Settings of {
   handler      : ('c option * 'd option) -> ('a, 'b) Socket.sock -> unit,
   port         : int,
   host         : string,
-  accept_queue : int,
+  acceptQueue  : int,
   workers      : int,
-  max_requests : int,
+  maxRequests  : int,
   reuseport    : bool,
-  worker_hook  : ((unit -> 'c) * ('c -> unit)) option,
-  connect_hook : ((unit -> 'd) * ('d -> unit)) option,
+  workerHook   : ((unit -> 'c) * ('c -> unit)) option,
+  connectHook  : ((unit -> 'd) * ('d -> unit)) option,
   logger       : string -> unit
 }
 
@@ -26,12 +26,12 @@ datatype ('a, 'b, 'c, 'd) settings = Settings of {
   handler      : ('c option * 'd option) -> ('a, 'b) Socket.sock -> unit,
   port         : int,
   host         : string,
-  accept_queue : int,
+  acceptQueue  : int,
   workers      : int,
-  max_requests : int,
+  maxRequests  : int,
   reuseport    : bool,
-  worker_hook  : ((unit -> 'c) * ('c -> unit)) option,
-  connect_hook : ((unit -> 'd) * ('d -> unit)) option,
+  workerHook   : ((unit -> 'c) * ('c -> unit)) option,
+  connectHook  : ((unit -> 'd) * ('d -> unit)) option,
   logger       : string -> unit
 }
 
@@ -58,41 +58,41 @@ fun run'' (settings as {host = host, port = port, reuseport = reuseport, logger 
         Socket.Ctl.setREUSEADDR (sock, true);
         if reuseport then setsockopt_REUSEPORT fd else ();
         Socket.bind (sock, addr);
-        Socket.listen (sock, (#accept_queue settings));
+        Socket.listen (sock, (#acceptQueue settings));
         sock
       end
 
-    val maybe_listen_sock = if reuseport then GetListenSocket listen else ListenSocket (listen ())
+    val maybeListenSock = if reuseport then GetListenSocket listen else ListenSocket (listen ())
 
-    fun do_listen maybe_listen_sock =
+    fun doListen maybeListenSock =
       let
-        val listen_sock = case maybe_listen_sock of ListenSocket sock => sock | GetListenSocket f => f ()
+        val listenSock = case maybeListenSock of ListenSocket sock => sock | GetListenSocket f => f ()
         val handler = #handler settings
 
-        val worker_hook = #worker_hook settings
-        val worker_hook_data = case worker_hook of NONE => NONE | SOME (init, cleanup) => SOME (init ())
+        val workerHook = #workerHook settings
+        val workerHookData = case workerHook of NONE => NONE | SOME (init, cleanup) => SOME (init ())
 
-        val connect_hook = #connect_hook settings
+        val connectHook = #connectHook settings
 
-        fun do_accept () =
+        fun doAccept () =
           let
-            val (sock, _) = Socket.accept (listen_sock)
-            val connect_hook_data = case connect_hook of NONE => NONE | SOME (init, cleanup) => SOME (init ())
+            val (sock, _) = Socket.accept (listenSock)
+            val connectHookData = case connectHook of NONE => NONE | SOME (init, cleanup) => SOME (init ())
           in
             Socket.Ctl.setKEEPALIVE (sock, true);
-            handler (worker_hook_data, connect_hook_data) sock handle exc => logger ("function handler raised an exception: " ^ exnMessage exc);
-            case connect_hook of NONE => () | SOME (init, cleanup) => cleanup (valOf connect_hook_data);
+            handler (workerHookData, connectHookData) sock handle exc => logger ("function handler raised an exception: " ^ exnMessage exc);
+            case connectHook of NONE => () | SOME (init, cleanup) => cleanup (valOf connectHookData);
             Socket.close sock;
-            do_accept ()
+            doAccept ()
           end
 
       in
-        do_accept ();
-        case worker_hook of NONE => () | SOME (init, cleanup) => cleanup (valOf worker_hook_data)
+        doAccept ();
+        case workerHook of NONE => () | SOME (init, cleanup) => cleanup (valOf workerHookData)
       end
   in
-    runWithN (#workers settings) do_listen maybe_listen_sock;
-    case maybe_listen_sock of ListenSocket sock => Socket.close sock | _ => ();
+    runWithN (#workers settings) doListen maybeListenSock;
+    case maybeListenSock of ListenSocket sock => Socket.close sock | _ => ();
     logger "The End."
   end
 
