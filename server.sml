@@ -74,9 +74,10 @@ fun run'' (settings as {host = host, port = port, reuseport = reuseport, logger 
 
         val connectHook = #connectHook settings
 
-        fun doAccept () =
+        fun doAccept () = case accept listenSock of
+            NONE => if needStop () then () else doAccept ()
+          | SOME (sock, _) =>
           let
-            val (sock, _) = Socket.accept (listenSock)
             val connectHookData = case connectHook of NONE => NONE | SOME (init, cleanup) => SOME (init ())
           in
             Socket.Ctl.setKEEPALIVE (sock, true);
@@ -92,8 +93,7 @@ fun run'' (settings as {host = host, port = port, reuseport = reuseport, logger 
       end
   in
     runWithN (#workers settings) doListen maybeListenSock;
-    case maybeListenSock of ListenSocket sock => Socket.close sock | _ => ();
-    logger "The End."
+    case maybeListenSock of ListenSocket sock => Socket.close sock | _ => ()
   end
 
 
