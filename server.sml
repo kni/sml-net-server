@@ -16,6 +16,11 @@ datatype ('a, 'b, 'c, 'd) settings = Settings of {
 
 val run: (INetSock.inet, Socket.active Socket.stream, 'c, 'd) settings -> unit
 
+val needStop: unit -> bool
+
+val read  : ('a, Socket.active Socket.stream) Socket.sock * int    * Time.time option -> string
+val write : ('a, Socket.active Socket.stream) Socket.sock * string * Time.time option -> bool
+
 end
 =
 struct

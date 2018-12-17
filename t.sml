@@ -5,11 +5,21 @@ fun logger msg = print ((Date.fmt "%Y-%m-%d %H:%M:%S" (Date.fromTimeUniv(Time.no
 fun main () =
   let
 
+    val timeout = Time.fromSeconds 10
+
+    fun read socket = NetServer.read (socket, 1024, (SOME timeout))
+    fun write (socket, text) = NetServer.write (socket, text, (SOME timeout))
+
     fun handler (workerHookData, connectHookData) socket = (
       logger "Hello, socket.";
       case connectHookData of NONE => () | SOME data => print data;
-      print (Byte.bytesToString(Socket.recvVec (socket, 1024)));
-      Socket.sendVec (socket, Word8VectorSlice.full (Byte.stringToBytes "pong\n"));
+      let
+        val r = read socket
+      in
+        if r = ""
+        then (if NetServer.needStop () then false else write (socket, "timeout\n"))
+        else (print r; write (socket, "pong\n"))
+      end;
       logger "BY, socket."
     )
 
@@ -18,7 +28,7 @@ fun main () =
       port           = 5000,
       host           = "*",
       acceptQueue    = 10,
-      workers        = 2,
+      workers        = 3,
       maxRequests    = 1000, (* ToDo *)
       reuseport      = false,
       workerHook     = SOME ( (fn () => logger "Worker init hook."),  (fn _  => logger "Worker cleanup hook.") ),

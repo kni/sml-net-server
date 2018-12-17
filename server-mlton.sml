@@ -13,12 +13,47 @@ fun run' f x = (
 
 fun accept socket =
   let
-    fun doit socket = case Socket.select { rds = [(Socket.sockDesc socket)], wrs = [], exs = [], timeout = NONE } of
+    val sd = Socket.sockDesc socket
+    fun doit socket = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = NONE } of
         { rds = [sd], wrs = [], exs = [] } =>
         (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit socket | r => r)
       | _ => NONE
   in
     doit socket handle OS.SysErr ("Interrupted system call", _) => if !stop then NONE else doit socket | exc => raise exc
+  end
+
+
+(* Exceptions do not used for read and write, since functions can be called from callback of C function *)
+
+(* return "" if timeout or stop *)
+fun read (socket, chunksize, (timeout:Time.time option)) =
+  let
+    val sd = Socket.sockDesc socket
+    fun doit () = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = timeout } of
+        { rds = [sd], wrs = [], exs = [] } => Byte.bytesToString (Socket.recvVec (socket, chunksize))
+      | _ => ""
+  in
+    doit () handle OS.SysErr ("Interrupted system call", _) => if !stop then "" else doit () | exc => raise exc
+  end
+
+
+(* return false if timeout or stop *)
+fun write (socket, text, (timeout:Time.time option)) =
+  let
+    val sd = Socket.sockDesc socket
+    val data = Word8VectorSlice.full (Byte.stringToBytes text)
+
+    fun doit data = case Socket.select { rds = [], wrs = [sd], exs = [], timeout = timeout } of
+        { rds = [], wrs = [sd], exs = [] } =>
+          let
+            val n = Socket.sendVec (socket, data)
+          in
+            if n = Word8VectorSlice.length data then true else
+            doit (Word8VectorSlice.subslice (data, n, NONE))
+          end
+      | _ => false
+  in
+    doit data handle OS.SysErr ("Interrupted system call", _) => if !stop then false else doit data | exc => raise exc
   end
 
 
