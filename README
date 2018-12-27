@@ -1,0 +1,18 @@
+net-server - Standard ML server engine
+
+Features:
+
+  * Runs on MLton and Poly/ML
+  * Preforking Mode
+  * Worker hook for initialition and cleanup worker
+  * Connect hook for initialition and cleanup after open socket
+  * TERM signal to stop
+  * Reuseport support
+
+
+See also:
+
+https://github.com/kni/sml-net-server     - Standard ML server engine
+https://github.com/kni/sml-net-server-ev  - asynchronous Standard ML server engine
+https://github.com/kni/sml-http-server    - Standard ML http server
+https://github.com/kni/sml-http-server-ev - asynchronous Standard ML http server
