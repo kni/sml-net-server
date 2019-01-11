@@ -4,8 +4,8 @@ Features:
 
   * Runs on MLton and Poly/ML
   * Preforking Mode
-  * Worker hook for initialition and cleanup worker
-  * Connect hook for initialition and cleanup after open socket
+  * Worker hook for initialization and cleanup worker
+  * Connect hook for initialization and cleanup after open socket
   * TERM signal to stop
   * Reuseport support
 
