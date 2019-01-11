@@ -33,7 +33,10 @@ fun read (socket, chunksize, (timeout:Time.time option)) =
         { rds = [sd], wrs = [], exs = [] } => Byte.bytesToString (Socket.recvVec (socket, chunksize))
       | _ => ""
   in
-    doit () handle OS.SysErr ("Interrupted system call", _) => if !stop then "" else doit () | exc => raise exc
+    doit () handle
+        OS.SysErr ("Interrupted system call", _) => if !stop then "" else doit ()
+      | OS.SysErr (_, SOME ECONNRESET) => ""
+      | exc => raise exc
   end
 
 
@@ -53,7 +56,10 @@ fun write (socket, text, (timeout:Time.time option)) =
           end
       | _ => false
   in
-    doit data handle OS.SysErr ("Interrupted system call", _) => if !stop then false else doit data | exc => raise exc
+    doit data handle
+        OS.SysErr ("Interrupted system call", _) => if !stop then false else doit data
+      | OS.SysErr (_, SOME EPIPE) => false
+      | exc => raise exc
   end
 
 

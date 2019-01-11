@@ -34,7 +34,10 @@ fun read (socket, chunksize, (timeout:Time.time option)) =
         { rds = [sd], wrs = [], exs = [] } => Byte.bytesToString (Socket.recvVec (socket, chunksize))
       | _ => ""
   in
-    doit timeout handle Thread.Thread.Interrupt => if !stop then "" else doit timeout | exc => raise exc
+    doit timeout handle
+        Thread.Thread.Interrupt => if !stop then "" else doit timeout
+      | OS.SysErr (_, SOME ECONNRESET) => ""
+      | exc => raise exc
   end
 
 
@@ -54,7 +57,10 @@ fun write (socket, text, (timeout:Time.time option)) =
           end
       | _ => false
   in
-    doit (data, timeout) handle Thread.Thread.Interrupt => if !stop then false else doit (data, timeout) | exc => raise exc
+    doit (data, timeout) handle
+        Thread.Thread.Interrupt => if !stop then false else doit (data, timeout)
+      | OS.SysErr (_, SOME EPIPE) => false
+      | exc => raise exc
   end
 
 
