@@ -36,7 +36,7 @@ fun read (socket, chunksize, (timeout:Time.time option)) =
   in
     doit timeout handle
         Thread.Thread.Interrupt => if !stop then "" else doit timeout
-      | OS.SysErr (_, SOME ECONNRESET) => ""
+      | exc as OS.SysErr (s, SOME e) => if OS.errorName e = "ECONNRESET" then "" else raise exc
       | exc => raise exc
   end
 
@@ -59,7 +59,7 @@ fun write (socket, text, (timeout:Time.time option)) =
   in
     doit (data, timeout) handle
         Thread.Thread.Interrupt => if !stop then false else doit (data, timeout)
-      | OS.SysErr (_, SOME EPIPE) => false
+      | exc as OS.SysErr (s, SOME e) => if OS.errorName e = "EPIPE" then false else raise exc
       | exc => raise exc
   end
 

@@ -19,7 +19,11 @@ fun accept socket =
         (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit socket | r => r)
       | _ => NONE
   in
-    doit socket handle OS.SysErr ("Interrupted system call", _) => if !stop then NONE else doit socket | exc => raise exc
+    doit socket handle
+        OS.SysErr (s, SOME e) =>
+          if e = Posix.Error.intr then (if !stop then NONE else doit socket) else
+          raise OS.SysErr (s, SOME e)
+      | exc => raise exc
   end
 
 
@@ -34,8 +38,10 @@ fun read (socket, chunksize, (timeout:Time.time option)) =
       | _ => ""
   in
     doit () handle
-        OS.SysErr ("Interrupted system call", _) => if !stop then "" else doit ()
-      | OS.SysErr (_, SOME ECONNRESET) => ""
+        exc as OS.SysErr (s, SOME e) =>
+          if e = Posix.Error.intr then (if !stop then "" else doit ()) else
+          if Posix.Error.errorName e = "connreset" then "" else
+          raise exc
       | exc => raise exc
   end
 
@@ -57,8 +63,10 @@ fun write (socket, text, (timeout:Time.time option)) =
       | _ => false
   in
     doit data handle
-        OS.SysErr ("Interrupted system call", _) => if !stop then false else doit data
-      | OS.SysErr (_, SOME EPIPE) => false
+        exc as OS.SysErr (s, SOME e) =>
+          if e = Posix.Error.intr then (if !stop then false else doit data) else
+          if e = Posix.Error.pipe then false else
+          raise exc
       | exc => raise exc
   end
 
