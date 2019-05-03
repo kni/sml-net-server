@@ -94,12 +94,15 @@ local
         doFork (n-1) f x ((m, c)::tm)
       end
 
-  fun doWait [] = ()
-    | doWait (all as ((m, c)::xs)) = (wait(c, m); doWait xs) handle Interrupt => doWait all | exc => raise exc
+  fun doWait f x [] = ()
+    | doWait f x (all as ((m, c)::tl)) = (
+          wait(c, m);
+          if !stop then doWait f x tl else doWait f x (doFork 1 f x tl)
+        ) handle Interrupt => doWait f x all | exc => raise exc
 in
   fun runWithN n f x =
     if n > 1
-    then doWait (doFork n f x [])
+    then doWait f x (doFork n f x [])
     else f x
 end
 
