@@ -101,7 +101,7 @@ local
         ) handle Interrupt => doWait f x all | exc => raise exc
 in
   fun runWithN n f x =
-    if n > 1
+    if n > 0
     then doWait f x (doFork n f x [])
     else f x
 end
