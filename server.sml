@@ -83,8 +83,10 @@ fun run'' (settings as {host = host, port = port, reuseport = reuseport, logger 
 
         val connectHook = #connectHook settings
 
-        fun doAccept () = case accept listenSock of
-            NONE => if needStop () then () else doAccept ()
+        val maxRequests = #maxRequests settings
+
+        fun doAccept request_cnt = case accept listenSock of
+            NONE => if needStop () then () else doAccept request_cnt
           | SOME (sock, _) =>
           let
             val connectHookData = case connectHook of NONE => NONE | SOME (init, cleanup) => SOME (init ())
@@ -93,11 +95,12 @@ fun run'' (settings as {host = host, port = port, reuseport = reuseport, logger 
             handler (workerHookData, connectHookData) sock handle exc => logger ("function handler raised an exception: " ^ exnMessage exc);
             case connectHook of NONE => () | SOME (init, cleanup) => cleanup (valOf connectHookData);
             Socket.close sock;
-            doAccept ()
+            if maxRequests = 0 then doAccept request_cnt else
+            if request_cnt < maxRequests then doAccept (request_cnt + 1) else logger ("Max request count achieved.")
           end
 
       in
-        doAccept ();
+        doAccept 0;
         case workerHook of NONE => () | SOME (init, cleanup) => cleanup (valOf workerHookData)
       end
   in
