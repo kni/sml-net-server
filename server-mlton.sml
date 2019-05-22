@@ -2,8 +2,9 @@ structure NetServer =
 struct
 
 val stop = ref false
+val quit = ref false
 
-fun needStop () = !stop
+fun needStop () = !stop orelse !quit
 
 fun run' f x = (
   MLton.Signal.setHandler(Posix.Signal.pipe, MLton.Signal.Handler.ignore);
@@ -21,7 +22,7 @@ fun accept socket =
   in
     doit socket handle
         OS.SysErr (s, SOME e) =>
-          if e = Posix.Error.intr then (if !stop then NONE else doit socket) else
+          if e = Posix.Error.intr then (if needStop () then NONE else doit socket) else
           raise OS.SysErr (s, SOME e)
       | exc => raise exc
   end
@@ -92,18 +93,26 @@ local
 
   val child_pids = ref []
 
-  fun sendSignalToChild signal = List.app (fn pid => Posix.Process.kill (Posix.Process.K_PROC pid, signal)) (!child_pids)
 
-  fun setHandlerForTermSignal false = (
-      MLton.Signal.setHandler(Posix.Signal.term, MLton.Signal.Handler.simple (fn () => stop := true))
+  fun sendSignalToChild signal =
+    if main_pid = Posix.ProcEnv.getpid ()
+    then List.app (fn pid => Posix.Process.kill (Posix.Process.K_PROC pid, signal)) (!child_pids)
+    else ()
+
+
+  fun setHandlersForSignals false = (
+      MLton.Signal.setHandler (Posix.Signal.term, MLton.Signal.Handler.simple (fn () => stop := true));
+      MLton.Signal.setHandler (Posix.Signal.quit, MLton.Signal.Handler.simple (fn () => quit := true))
     )
-    | setHandlerForTermSignal true = ( (* send signal to group *)
-      MLton.Signal.setHandler(Posix.Signal.term, MLton.Signal.Handler.simple (fn () => (
+    | setHandlersForSignals true = ( (* send signal to group *)
+      MLton.Signal.setHandler (Posix.Signal.term, MLton.Signal.Handler.simple (fn () => (
         stop := true;
         (* print ("Got TERM signal for " ^ (pidToString (Posix.ProcEnv.getpid ())) ^ ", main pid is " ^ (pidToString main_pid) ^ ".\n"); *)
-        if main_pid = Posix.ProcEnv.getpid ()
-        then List.app (fn pid => Posix.Process.kill (Posix.Process.K_PROC pid, Posix.Signal.term)) (!child_pids)
-        else ()
+        sendSignalToChild Posix.Signal.term
+      )));
+      MLton.Signal.setHandler (Posix.Signal.quit, MLton.Signal.Handler.simple (fn () => (
+        quit := true;
+        sendSignalToChild Posix.Signal.quit
       )))
     )
 
@@ -121,13 +130,14 @@ local
                doFork logger (n - 1) f x
              )
 
+
   fun wait logger f x =
     let
       val (pid, _) = Posix.Process.wait ()
     in
       (* logger ("Stoped " ^ pidToString pid); *)
       child_pids := List.filter (fn p => p <> pid) (!child_pids);
-      if !stop then () else doFork logger 1 f x;
+      if needStop () then () else doFork logger 1 f x;
       if null (!child_pids) then () else wait logger f x
     end
 
@@ -135,13 +145,13 @@ in
   fun runWithN logger n f x =
     if n > 0
     then (
-      setHandlerForTermSignal true;
+      setHandlersForSignals true;
       logger ("My PID is " ^ ( myPidAsString () ) ^ ".");
       doFork logger n f x;
       wait logger f x
     )
     else (
-      setHandlerForTermSignal false;
+      setHandlersForSignals false;
       f x
     )
 end

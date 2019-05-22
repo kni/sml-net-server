@@ -2,12 +2,14 @@ structure NetServer =
 struct
 
 val stop = ref false
+val quit = ref false
 
-fun needStop () = !stop
+fun needStop () = !stop orelse !quit
 
 fun run' f x = (
   Signal.signal (Posix.Signal.pipe, Signal.SIG_IGN);
   Signal.signal (Posix.Signal.term, Signal.SIG_HANDLE (fn _ => (stop := true; Thread.Thread.broadcastInterrupt ())));
+  Signal.signal (Posix.Signal.quit, Signal.SIG_HANDLE (fn _ => (quit := true; Thread.Thread.broadcastInterrupt ())));
   f x
 )
 
@@ -18,9 +20,9 @@ fun accept socket =
     fun doit socket = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = NONE } of
         { rds = [sd], wrs = [], exs = [] } =>
           (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit socket | r => r)
-      | _ => if !stop then NONE else doit socket
+      | _ => if needStop () then NONE else doit socket
   in
-    doit socket handle Thread.Thread.Interrupt => if !stop then NONE else doit socket | exc => raise exc
+    doit socket handle Thread.Thread.Interrupt => if needStop () then NONE else doit socket | exc => raise exc
   end
 
 
@@ -97,7 +99,7 @@ local
   fun doWait f x [] = ()
     | doWait f x (all as ((m, c)::tl)) = (
           wait(c, m);
-          if !stop then doWait f x tl else doWait f x (doFork 1 f x tl)
+          if needStop () then doWait f x tl else doWait f x (doFork 1 f x tl)
         ) handle Interrupt => doWait f x all | exc => raise exc
 in
   fun runWithN logger n f x =
