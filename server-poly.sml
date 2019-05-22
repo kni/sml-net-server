@@ -100,7 +100,7 @@ local
           if !stop then doWait f x tl else doWait f x (doFork 1 f x tl)
         ) handle Interrupt => doWait f x all | exc => raise exc
 in
-  fun runWithN n f x =
+  fun runWithN logger n f x =
     if n > 0
     then doWait f x (doFork n f x [])
     else f x

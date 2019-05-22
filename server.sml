@@ -104,7 +104,7 @@ fun run'' (settings as {host = host, port = port, reuseport = reuseport, logger 
         case workerHook of NONE => () | SOME (init, cleanup) => cleanup (valOf workerHookData)
       end
   in
-    runWithN (#workers settings) doListen maybeListenSock;
+    runWithN logger (#workers settings) doListen maybeListenSock;
     case maybeListenSock of ListenSocket sock => Socket.close sock | _ => ()
   end
 

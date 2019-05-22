@@ -92,6 +92,8 @@ local
 
   val child_pids = ref []
 
+  fun sendSignalToChild signal = List.app (fn pid => Posix.Process.kill (Posix.Process.K_PROC pid, signal)) (!child_pids)
+
   fun setHandlerForTermSignal false = (
       MLton.Signal.setHandler(Posix.Signal.term, MLton.Signal.Handler.simple (fn () => stop := true))
     )
@@ -105,38 +107,38 @@ local
       )))
     )
 
-  fun doFork 0 f x = ()
-    | doFork n f x =
+  fun doFork logger 0 f x = ()
+    | doFork logger n f x =
         case Posix.Process.fork () of
              NONE => (
                 child_pids := [];
-                print ("I am child, my PID is " ^ ( myPidAsString () ) ^ ".\n");
+                logger ("I am child, my PID is " ^ ( myPidAsString () ) ^ ".");
                 f x;
                 Posix.Process.exit 0w0
                 )
            | SOME pid => (
                child_pids := pid::(!child_pids);
-               doFork (n - 1) f x
+               doFork logger (n - 1) f x
              )
 
-  fun wait f x =
+  fun wait logger f x =
     let
       val (pid, _) = Posix.Process.wait ()
     in
-      (* print ("Stoped " ^ pidToString pid ^ "\n"); *)
+      (* logger ("Stoped " ^ pidToString pid); *)
       child_pids := List.filter (fn p => p <> pid) (!child_pids);
-      if !stop then () else doFork 1 f x;
-      if null (!child_pids) then () else wait f x
+      if !stop then () else doFork logger 1 f x;
+      if null (!child_pids) then () else wait logger f x
     end
 
 in
-  fun runWithN n f x =
+  fun runWithN logger n f x =
     if n > 0
     then (
       setHandlerForTermSignal true;
-      print ("My PID is " ^ ( myPidAsString () ) ^ ".\n");
-      doFork n f x;
-      wait f x
+      logger ("My PID is " ^ ( myPidAsString () ) ^ ".");
+      doFork logger n f x;
+      wait logger f x
     )
     else (
       setHandlerForTermSignal false;
