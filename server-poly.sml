@@ -85,26 +85,34 @@ local
   open Thread
   open Thread Mutex ConditionVar
 
-  fun doFork 0 f x tm = tm
-    | doFork n f x tm =
-      let
-        val m = mutex ()
-        val c = conditionVar ()
-        val _ = lock m
-        val _ = fork(fn() => (f x; lock m; signal c; unlock m), [EnableBroadcastInterrupt true])
-      in
-        doFork (n-1) f x ((m, c)::tm)
-      end
+  val m = mutex ()
+  val c = conditionVar ()
+  val cnt = ref 0
 
-  fun doWait f x [] = ()
-    | doWait f x (all as ((m, c)::tl)) = (
-          wait(c, m);
-          if needStop () then doWait f x tl else doWait f x (doFork 1 f x tl)
-        ) handle Interrupt => doWait f x all | exc => raise exc
+  fun doFork n f x =
+    let
+      fun doit 0 = ()
+        | doit n = (
+            cnt := !cnt + 1;
+            fork (fn () => (f x; lock m; signal c; cnt := !cnt - 1; unlock m), [EnableBroadcastInterrupt true]);
+            doit (n - 1)
+          )
+    in
+      lock m;
+      doit n;
+      unlock m
+    end
+
+  fun doWait f x  =
+    while !cnt > 0 do (
+      wait(c, m);
+      if needStop () then () else (unlock m; doFork 1 f x)
+    ) handle Interrupt => doWait f x | exc => raise exc
+
 in
   fun runWithN logger n f x =
     if n > 0
-    then doWait f x (doFork n f x [])
+    then (doFork n f x; doWait f x)
     else f x
 end
 
