@@ -100,7 +100,7 @@ fun run'' (settings as {host = host, port = port, reuseport = reuseport, logger 
           end
 
       in
-        doAccept 0;
+        doAccept 1;
         case workerHook of NONE => () | SOME (init, cleanup) => cleanup (valOf workerHookData)
       end
   in
