@@ -95,6 +95,7 @@ fun run'' (settings as {host = host, port = port, reuseport = reuseport, logger 
             handler (workerHookData, connectHookData) sock handle exc => logger ("function handler raised an exception: " ^ exnMessage exc);
             case connectHook of NONE => () | SOME (init, cleanup) => cleanup (valOf connectHookData);
             Socket.close sock;
+            if needStop () then () else
             if maxRequests = 0 then doAccept request_cnt else
             if request_cnt < maxRequests then doAccept (request_cnt + 1) else logger ("Max request count achieved.")
           end
