@@ -35,7 +35,10 @@ fun read (socket, chunksize, (timeout:Time.time option)) =
   let
     val sd = Socket.sockDesc socket
     fun doit () = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = timeout } of
-        { rds = [sd], wrs = [], exs = [] } => Byte.bytesToString (Socket.recvVec (socket, chunksize))
+        { rds = [sd], wrs = [], exs = [] } => (
+          case Socket.recvVecNB (socket, chunksize) of NONE => "" | SOME n =>
+          Byte.bytesToString n
+        )
       | _ => ""
   in
     doit () handle
@@ -54,13 +57,13 @@ fun write (socket, text, (timeout:Time.time option)) =
     val data = Word8VectorSlice.full (Byte.stringToBytes text)
 
     fun doit data = case Socket.select { rds = [], wrs = [sd], exs = [], timeout = timeout } of
-        { rds = [], wrs = [sd], exs = [] } =>
-          let
-            val n = Socket.sendVec (socket, data)
-          in
+        { rds = [], wrs = [sd], exs = [] } => (
+          case Socket.sendVecNB (socket, data) of NONE => false | SOME n =>
+          (
             if n = Word8VectorSlice.length data then true else
             doit (Word8VectorSlice.subslice (data, n, NONE))
-          end
+          )
+        )
       | _ => false
   in
     doit data handle
