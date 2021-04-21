@@ -21,9 +21,9 @@ fun accept socket =
       | _ => NONE
   in
     doit socket handle
-        OS.SysErr (s, SOME e) =>
+        exc as OS.SysErr (s, SOME e) =>
           if e = Posix.Error.intr then (if needStop () then NONE else doit socket) else
-          raise OS.SysErr (s, SOME e)
+          raise exc
       | exc => raise exc
   end
 
@@ -96,10 +96,13 @@ local
 
   val child_pids = ref []
 
+  fun kill signal pid = Posix.Process.kill (Posix.Process.K_PROC pid, signal)
+    handle exc as OS.SysErr (s, SOME e) => if e = Posix.Error.srch then () else raise exc | exc => raise exc
+    (* Ignore srch error since the child process may have already completed itself at this time. *)
 
   fun sendSignalToChild signal =
     if main_pid = Posix.ProcEnv.getpid ()
-    then List.app (fn pid => Posix.Process.kill (Posix.Process.K_PROC pid, signal)) (!child_pids)
+    then List.app (kill signal) (!child_pids)
     else ()
 
 
