@@ -122,6 +122,7 @@ local
       )))
     )
 
+
   fun doFork logger 0 f x = ()
     | doFork logger n f x =
         case Posix.Process.fork () of
@@ -140,10 +141,14 @@ local
   fun wait logger f x =
     let
       val (pid, _) = Posix.Process.wait ()
+      val myChild = List.exists (fn p => p = pid) (!child_pids)
     in
-      (* logger ("Stoped " ^ pidToString pid); *)
-      child_pids := List.filter (fn p => p <> pid) (!child_pids);
-      if needStop () then () else doFork logger 1 f x;
+      if myChild
+      then (
+        (* logger ("Stoped " ^ pidToString pid ^ "\n"); *)
+        child_pids := List.filter (fn p => p <> pid) (!child_pids);
+        if !stop then () else doFork logger 1 f x
+      ) else ();
       if null (!child_pids) then () else wait logger f x
     end
 
