@@ -15,14 +15,14 @@ fun run' f x = (
 fun accept socket =
   let
     val sd = Socket.sockDesc socket
-    fun doit socket = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = NONE } of
+    fun doit () = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = NONE } of
         { rds = [sd], wrs = [], exs = [] } =>
-        (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit socket | r => r)
+        (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit () | r => r)
       | _ => NONE
   in
-    doit socket handle
+    doit () handle
         exc as OS.SysErr (s, SOME e) =>
-          if e = Posix.Error.intr then (if needStop () then NONE else doit socket) else
+          if e = Posix.Error.intr then (if needStop () then NONE else doit ()) else
           raise exc
       | exc => raise exc
   end

@@ -17,12 +17,12 @@ fun run' f x = (
 fun accept socket =
   let
     val sd = Socket.sockDesc socket
-    fun doit socket = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = NONE } of
+    fun doit () = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = NONE } of
         { rds = [sd], wrs = [], exs = [] } =>
-          (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit socket | r => r)
-      | _ => if needStop () then NONE else doit socket
+          (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit () | r => r)
+      | _ => if needStop () then NONE else doit ()
   in
-    doit socket handle Thread.Thread.Interrupt => if needStop () then NONE else doit socket | exc => raise exc
+    doit () handle Thread.Thread.Interrupt => if needStop () then NONE else doit () | exc => raise exc
   end
 
 
