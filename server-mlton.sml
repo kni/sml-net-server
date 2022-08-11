@@ -15,16 +15,19 @@ fun run' f x = (
 fun accept socket =
   let
     val sd = Socket.sockDesc socket
-    fun doit () = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = NONE } of
-        { rds = [sd], wrs = [], exs = [] } =>
-        (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit () | r => r)
-      | _ => NONE
+    fun doit () =
+      (
+        case Socket.select { rds = [sd], wrs = [], exs = [], timeout = NONE } of
+            { rds = [sd], wrs = [], exs = [] } =>
+            (case Socket.acceptNB socket of NONE (* Other worker was first *) => doit () | r => r)
+          | _ => NONE
+      ) handle
+            exc as OS.SysErr (s, SOME e) =>
+              if e = Posix.Error.intr then (if needStop () then NONE else doit ()) else
+              raise exc
+          | exc => raise exc
   in
-    doit () handle
-        exc as OS.SysErr (s, SOME e) =>
-          if e = Posix.Error.intr then (if needStop () then NONE else doit ()) else
-          raise exc
-      | exc => raise exc
+    doit ()
   end
 
 
@@ -34,19 +37,22 @@ fun accept socket =
 fun read (socket, chunksize, (timeout:Time.time option)) =
   let
     val sd = Socket.sockDesc socket
-    fun doit () = case Socket.select { rds = [sd], wrs = [], exs = [], timeout = timeout } of
-        { rds = [sd], wrs = [], exs = [] } => (
-          case Socket.recvVecNB (socket, chunksize) of NONE => "" | SOME n =>
-          Byte.bytesToString n
-        )
-      | _ => ""
+    fun doit () =
+      (
+        case Socket.select { rds = [sd], wrs = [], exs = [], timeout = timeout } of
+            { rds = [sd], wrs = [], exs = [] } => (
+              case Socket.recvVecNB (socket, chunksize) of NONE => "" | SOME n =>
+              Byte.bytesToString n
+            )
+          | _ => ""
+      ) handle
+            exc as OS.SysErr (s, SOME e) =>
+              if e = Posix.Error.intr then (if !stop then "" else doit ()) else
+              if Posix.Error.errorName e = "connreset" then "" else
+              raise exc
+          | exc => raise exc
   in
-    doit () handle
-        exc as OS.SysErr (s, SOME e) =>
-          if e = Posix.Error.intr then (if !stop then "" else doit ()) else
-          if Posix.Error.errorName e = "connreset" then "" else
-          raise exc
-      | exc => raise exc
+    doit ()
   end
 
 
@@ -56,22 +62,25 @@ fun write (socket, text, (timeout:Time.time option)) =
     val sd = Socket.sockDesc socket
     val data = Word8VectorSlice.full (Byte.stringToBytes text)
 
-    fun doit data = case Socket.select { rds = [], wrs = [sd], exs = [], timeout = timeout } of
-        { rds = [], wrs = [sd], exs = [] } => (
-          case Socket.sendVecNB (socket, data) of NONE => false | SOME n =>
-          (
-            if n = Word8VectorSlice.length data then true else
-            doit (Word8VectorSlice.subslice (data, n, NONE))
-          )
-        )
-      | _ => false
+    fun doit data =
+      (
+        case Socket.select { rds = [], wrs = [sd], exs = [], timeout = timeout } of
+            { rds = [], wrs = [sd], exs = [] } => (
+              case Socket.sendVecNB (socket, data) of NONE => false | SOME n =>
+              (
+                if n = Word8VectorSlice.length data then true else
+                doit (Word8VectorSlice.subslice (data, n, NONE))
+              )
+            )
+          | _ => false
+      ) handle
+            exc as OS.SysErr (s, SOME e) =>
+              if e = Posix.Error.intr then (if !stop then false else doit data) else
+              if e = Posix.Error.pipe then false else
+              raise exc
+          | exc => raise exc
   in
-    doit data handle
-        exc as OS.SysErr (s, SOME e) =>
-          if e = Posix.Error.intr then (if !stop then false else doit data) else
-          if e = Posix.Error.pipe then false else
-          raise exc
-      | exc => raise exc
+    doit data
   end
 
 
